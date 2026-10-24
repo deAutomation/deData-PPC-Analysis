@@ -65,6 +65,10 @@ def main():
     ap.add_argument('--out', default=os.path.join(HERE, 'reports'))
     args = ap.parse_args()
     (t0, prev), (t1, cur) = load_runs(args.input)
+    est_prev = {k[0] for k in prev}
+    est_cur = {k[0] for k in cur}
+    new_est = sorted(est_cur - est_prev)
+    gone_est = sorted(est_prev - est_cur)
     print(f'prev: {t0} ({len(prev)} lots)  cur: {t1} ({len(cur)} lots)')
 
     sales, cancels, new_listed, relisted, price_moves = [], [], [], [], []
@@ -157,6 +161,10 @@ def main():
         v = by_est[e]
         lines.append(f"- **{e}**: net {v['sales'] - v['cancels']} "
                      f"(sold {v['sales']}, cancelled {v['cancels']}, newly listed {v['new_listed']})")
+    if new_est or gone_est:
+        lines += ['', '## Estate changes',
+                  f"New: {', '.join(new_est) if new_est else '—'}",
+                  f"Gone: {', '.join(gone_est) if gone_est else '—'}"]
     lines += ['', '_First-seen lots excluded from velocity. Method mirrors SGP persistent tracking._']
     open(os.path.join(repdir, 'WEEKLY.md'), 'w').write('\n'.join(lines) + '\n')
 
