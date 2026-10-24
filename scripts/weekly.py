@@ -110,7 +110,45 @@ def main():
 
     # report
     tot_sales, tot_cx = sum(v['sales'] for v in by_est.values()), sum(v['cancels'] for v in by_est.values())
+    tot_new = sum(v['new_listed'] for v in by_est.values())
+    net_all = tot_sales - tot_cx
+
+    # history across runs → chart #1: sales measured per week
+    hist_path = os.path.join(args.out, 'history.csv')
+    hist = {}
+    if os.path.exists(hist_path):
+        with open(hist_path) as f:
+            for r in list(csv.DictReader(f)):
+                hist[r['week_ending']] = r
+    hist[date] = {'week_ending': date, 'net_sales': net_all, 'sold': tot_sales,
+                  'cancelled': tot_cx, 'newly_listed': tot_new, 'lots_tracked': len(cur)}
+    with open(hist_path, 'w', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=['week_ending', 'net_sales', 'sold', 'cancelled', 'newly_listed', 'lots_tracked'])
+        w.writeheader()
+        for d in sorted(hist):
+            w.writerow(hist[d])
+    weeks = sorted(hist)
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    x = range(len(weeks))
+    ax.bar(x, [int(hist[d]['sold']) for d in weeks], color='#2ca02c', label='sold')
+    ax.bar(x, [-int(hist[d]['cancelled']) for d in weeks], color='#d62728', label='cancelled')
+    ax.axhline(0, color='black', linewidth=0.8)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(weeks, rotation=20, ha='right', fontsize=8)
+    ax.set_ylabel('lots / week')
+    ax.legend(fontsize=8)
+    if not any(int(hist[d]['sold']) or int(hist[d]['cancelled']) for d in weeks):
+        ax.set_ylim(-1.5, 1.5)
+        ax.text(0.5, 0.5, '0 net — no movement this week', ha='center', va='center',
+                transform=ax.transAxes, fontsize=11, style='italic',
+                bbox=dict(fc='white', alpha=0.8, ec='none'))
+    ax.set_title('Peet — sales measured per week (sold green up, cancellations red down)', fontsize=11, weight='bold')
+    fig.tight_layout()
+    fig.savefig(os.path.join(chdir, 'sales_per_week.png'), bbox_inches='tight')
+    plt.close(fig)
     lines = [f'# PPC weekly — {t0[:10]} → {date}', '',
+             f'*Most recent data: {date} (snapshots {t0[:16]} → {t1[:16]}).*', '',
+             '![sales measured per week](../../charts/sales_per_week.png)', '',
              f'Snapshots: {len(prev):,} → {len(cur):,} lots tracked.',
              f'**Net sales: {tot_sales - tot_cx}** ({tot_sales} sold, {tot_cx} cancellations), '
              f'{len(new_listed)} newly listed.', '',
