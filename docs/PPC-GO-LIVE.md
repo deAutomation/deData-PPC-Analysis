@@ -1,7 +1,7 @@
-# PPT go-live — from by-invitation to sold
+# PPC go-live — from by-invitation to sold
 
 What already exists, what is missing, and the exact steps to put
-`ppt.data.deautomation.co` on sale.
+`ppc.data.deautomation.co` on sale.
 
 The hub repository is **not writable from this checkout**; the changes below
 are specified so they can be applied there.
@@ -10,14 +10,43 @@ are specified so they can be applied there.
 
 ## Already in place
 
+> **Correction, 2026-11-06:** the hub currently publishes the label **`ppt`** and
+> the ticker **"ASX: PPT"**. Peet Limited is **ASX: PPC** (the repo, bucket prefix
+> and Firestore collection are already `PPC`). Nothing is sold yet — no Stripe
+> product, no entitlement, no site — so the label is still free to change.
+
 | Piece | State |
 |---|---|
-| Label `ppt` | in the catalogue (`dist/index.html`) and the Log in menu, marked *by invitation* |
+| Label | `ppt` in the catalogue and Log in menu — **must become `ppc`** |
+| Ticker copy | "ASX: PPT" in 9 places — **wrong, must become PPC** |
 | Catalogue card | `#ppt`, "Peet Limited (ASX: PPT) · By invitation", mailto CTA |
 | Package registry | **not** in `HUB_PACKAGES` — must be added |
 | Stripe product | none |
-| ETL | `deData-PPC-ETL-Pipeline` written and tested; not yet deployed or scheduled |
+| ETL | `deData-PPC-ETL-Pipeline` written, tested, and loaded 35 communities; not deployed or scheduled |
 | Product site | does not exist |
+
+## 0. Rename the label `ppt` → `ppc` (do this first)
+
+A package label is a billing identity: entitlements are keyed `{account}:{label}`
+and Stripe metadata carries it. Renaming later means migrating entitlements, so
+do it before anything is sold. There are no entitlements to migrate today.
+
+In `data.deautomation.co`, replace across `dist/index.html`:
+
+| Where | From | To |
+|---|---|---|
+| nav menu item | `<strong>PPT</strong> Peet` | `<strong>PPC</strong> Peet` |
+| product card id / heading | `#ppt`, "PPT Alternative Data" | `#ppc`, "PPC Alternative Data" |
+| ticker | `ASX: PPT` | `ASX: PPC` |
+| card meta | "Peet Limited (ASX: PPT)" | "Peet Limited (ASX: PPC)" |
+| meta + og description | "SGP and PPT by invitation" | "SGP and PPC by invitation" |
+| mailto subject | `PPT%20Alternative%20Data%20enquiry` | `PPC%20Alternative%20Data%20enquiry` |
+
+Then the package list (see §1) uses `ppc`, and every later step — Stripe
+metadata, the product site's literal label, the domain — is `ppc`.
+
+Live check before you start: `curl -s https://data.deautomation.co/ | grep -c PPT`
+currently returns 9.
 
 ## 1. Register the package (hub)
 
@@ -25,11 +54,11 @@ are specified so they can be applied there.
 
 ```diff
 -        ENV="$ENV@HUB_PACKAGES=cwp,sgp"
-+        ENV="$ENV@HUB_PACKAGES=cwp,sgp,ppt"
++        ENV="$ENV@HUB_PACKAGES=cwp,sgp,ppc"
 ```
 
 No other hub code change is needed to *grant* the package: entitlements are
-keyed `{account_id}:{package_label}`, and `ppt` becomes a valid label the moment
+keyed `{account_id}:{package_label}`, and `ppc` becomes a valid label the moment
 it is in the list. The catalogue card and login dropdown already use it.
 
 ## 2. Firestore — **done**
@@ -79,11 +108,11 @@ repo's `cloudbuild.yaml`).
 
 ## 4. Stripe product and payment link
 
-One product, one price, one payment link — the link sells `ppt` only.
+One product, one price, one payment link — the link sells `ppc` only.
 
-1. Stripe → Products → new product **"PPT Alternative Data"**, AUD, excluding GST.
+1. Stripe → Products → new product **"PPC Alternative Data"**, AUD, excluding GST.
 2. Price: 12 months of access (not recurring), matching the CWP package model.
-3. Payment link → set **metadata** `package=ppt` (and `edition=YYYY-MM`), which
+3. Payment link → set **metadata** `package=ppc` (and `edition=YYYY-MM`), which
    the hub's `/webhooks/stripe` reads to grant `{account}:ppt`.
 4. Copy the link into the catalogue card only after the webhook grant has been
    tested end-to-end in Stripe test mode.
@@ -97,14 +126,14 @@ Deferred by decision; this is the shape it should take. Clone
 `data.deautomation.co-cwp` (Flask + Firestore + family session) and change only
 what differs:
 
-| Change | From (CWP) | To (PPT) |
+| Change | From (CWP) | To (PPC) |
 |---|---|---|
-| package label | `cwp` | `ppt` |
+| package label | `cwp` | `ppc` |
 | Firestore collection | `CWP` | `PPC` |
 | project | `lic-data-452300` | same |
 | reads | `status_counts/{date}` | same — never raw `runs/` |
-| service name | `cwp-data` | `ppt-data` |
-| host | `cwp.data.…` | `ppt.data.deautomation.co` |
+| service name | `cwp-data` | `ppc-data` |
+| host | `cwp.data.…` | `ppc.data.deautomation.co` |
 | branding / copy | CWP | Peet (ASX: PPC) |
 
 Env it will need (mirroring the live CWP service):
@@ -112,24 +141,24 @@ Env it will need (mirroring the live CWP service):
 ```text
 FIRESTORE_PROJECT = lic-data-452300
 FIRESTORE_COLLECTION = PPC
-PACKAGE_LABEL = ppt
-FLASK_SECRET_KEY = <secret: ppt-flask-secret>
+PACKAGE_LABEL = ppc
+FLASK_SECRET_KEY = <secret: ppc-flask-secret>
 ```
 
 Login is **not** built here — the site reads `da_session`, asks
-`https://data.deautomation.co/api/entitlements?package=ppt`, 403s on an empty
+`https://data.deautomation.co/api/entitlements?package=ppc`, 403s on an empty
 list, and redirects to `data.deautomation.co/login?return=<host+path>` on 401.
 The dropdown on the hub stays the single sign-in surface, exactly as with CWP.
 
 Deployment: push to `main` → the repo's GitHub workflow builds `cloudbuild.yaml`
-→ Cloud Run service `ppt-data`. Never deploy by hand.
+→ Cloud Run service `ppc-data`. Never deploy by hand.
 
 ## 6. DNS
 
 ```bash
 gcloud run domain-mappings create \
-  --service=ppt-data \
-  --domain=ppt.data.deautomation.co \
+  --service=ppc-data \
+  --domain=ppc.data.deautomation.co \
   --region=asia-southeast1
 ```
 
@@ -142,8 +171,8 @@ every product host.
 Only when 1–6 are done and the first full weekly diff has landed:
 
 - catalogue card: remove `By invitation`, add the price and the Stripe link
-- login dropdown: enable the `PPT` entry
-- `meta description` / `og:description`: PPT moves out of "by invitation"
+- login dropdown: enable the `PPC` entry
+- `meta description` / `og:description`: PPC moves out of "by invitation"
 
 ## Open questions before selling
 

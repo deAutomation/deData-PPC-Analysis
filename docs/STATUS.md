@@ -13,7 +13,7 @@ should follow.
 | `deData-PPC-Analysis` | research (this repo) | active; not in the production path |
 | `data.deautomation.co` | hub: catalogue, login, Stripe, entitlements | deployed (`data-catalogue`) |
 | `data.deautomation.co-cwp` | CWP product site | deployed (`cwp-data`), healthy |
-| `data.deautomation.co-ppt` | PPT product site | **not created** |
+| `data.deautomation.co-ppt` | PPC product site | **not created** |
 
 ## The data
 
@@ -75,10 +75,10 @@ whatever runs it is outside this project's scheduler.
 2. **No scheduler** — neither downloader nor ETL has a trigger recorded here.
 3. **Hub app routes unreachable** — `data-catalogue` serves nginx 404 on
    `/health` and `/api/session`. Login and entitlements are unverified.
-4. **`ppt` not in `HUB_PACKAGES`** — add to the hub's `cloudbuild.yaml`
-   (`cwp,sgp` → `cwp,sgp,ppt`); no other hub code change is needed to grant it.
-5. **PPT product site and `ppt.` domain** do not exist.
-6. **Stripe product** for PPT does not exist.
+4. **`ppc` not in `HUB_PACKAGES`** — add to the hub's `cloudbuild.yaml`
+   (`cwp,sgp` → `cwp,sgp,ppc`); no other hub code change is needed to grant it.
+5. **PPC product site and `ppt.` domain** do not exist.
+6. **Stripe product** for PPC does not exist.
 7. **Revenue coverage** is structurally sparse: all 38 first-time sales moved
    `Reserved → Sold` without ever being published, so none had an asking price.
 
@@ -87,6 +87,6 @@ whatever runs it is outside this project's scheduler.
 1. Deploy `ppc-etl-job` (push already done — CI builds it).
 2. Enable Cloud Scheduler; create `ppc-masterplan-weekly` (07:00) and
    `ppc-etl-weekly` (09:00) in `Australia/Adelaide`.
-3. Fix or confirm the hub routes, then add `ppt` to `HUB_PACKAGES`.
-4. Build `data.deautomation.co-ppt` + map `ppt.data.deautomation.co`.
+3. Fix or confirm the hub routes, then add `ppc` to `HUB_PACKAGES`.
+4. Build `data.deautomation.co-ppt` + map `ppc.data.deautomation.co`.
 5. Create the Stripe product/payment link, then flip the catalogue listing.

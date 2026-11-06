@@ -42,7 +42,7 @@ that made the analysis exit with `need 2 full runs`. Both halves are fixed:
 ```
 deData-PPC-MasterplanDownloader  ->  gs://masterplans/ppc/masterplans/json/
 deData-PPC-ETL-Pipeline          ->  Firestore lic-data-452300 / PPC / masterplan-data
-ppt.data.deautomation.co         ->  reads Firestore + hub entitlements   [not built]
+ppc.data.deautomation.co         ->  reads Firestore + hub entitlements   [not built]
 data.deautomation.co             ->  login, Stripe, entitlements
 ```
 
@@ -194,7 +194,7 @@ movement over labels.
 - `reports/history.csv` has two rows (2026-10-24, 2026-11-06). Every week since
   should append one; a missing week is a sync failure, not a data gap.
 - The Cloud Scheduler entry itself is infrastructure, not repo configuration —
-  see `docs/PPT-GO-LIVE.md` §3.
+  see `docs/PPC-GO-LIVE.md` §3.
 
 ## Vanished estates (delisting ≠ sale)
 - The downloader **rebuilds its estate list live every run** (index ∪ robots).

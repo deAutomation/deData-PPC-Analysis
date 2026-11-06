@@ -45,7 +45,7 @@ A **research repo** sits beside every product and feeds none of it.
 |---|---|---|---|---|---|
 | CWP | `cwp` | `deData-CWP-MasterplanDownloader` | `deData-CWP-ETL-Pipeline` | `data.deautomation.co-cwp` | on sale |
 | SGP | `sgp` | `deData-SGP-MasterplanDownloader` | `deData-SGP-ETL-Pipeline` | — | by invitation |
-| PPC | `ppt` | `deData-PPC-MasterplanDownloader` | `deData-PPC-ETL-Pipeline` | to build | by invitation |
+| PPC | `ppc` | `deData-PPC-MasterplanDownloader` | `deData-PPC-ETL-Pipeline` | to build | by invitation |
 | LIC | `lic` | — | `deData-LIC-ETL-Pipeline` | retired | archived |
 
 ## 2. Contracts
@@ -152,7 +152,7 @@ Worked example (times in `Australia/Adelaide`):
 
 | Company | Downloader | ETL | Buffer |
 |---|---|---|---|
-| PPC (`ppt`) | 07:00 Wed (observed `07-00`) | 09:00 Wed | 2 h |
+| PPC (`ppc`) | 07:00 Wed (observed `07-00`) | 09:00 Wed | 2 h |
 | CWP (`cwp`) | its own slot | its own slot | ≥2 h |
 | SGP (`sgp`) | its own slot | its own slot | ≥2 h |
 
