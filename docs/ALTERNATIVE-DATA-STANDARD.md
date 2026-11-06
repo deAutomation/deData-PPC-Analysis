@@ -113,6 +113,40 @@ Sources differ (CWP has its own status text, Peet uses numeric codes), but the
 vocabulary does not. Map at the edge; never rename a label to suit one estate.
 Unknown codes surface as `Unknown (<code>)` rather than disappearing.
 
+### 2.3a Status palette (shared, do not fork)
+
+Colour is part of the contract: a "sold" lot must read the same in CWP, SGP and
+PPC. **Sold is `#F15A29`** — the orange used for every "measured sold" bar in the
+CWP reports — and never a colour that could be mistaken for inventory.
+
+| Status | Hex | Role |
+|---|---|---|
+| `Sold` | `#F15A29` | the measured orange; the one colour that means sold |
+| `Available` | `#1f6f8b` | deep teal — primary inventory |
+| `Reserved` | `#7048b6` | purple — committed but not settled |
+| `Future Release` | `#c9d3dc` | light grey — drawn, not yet released |
+| `Unreleased` | `#d7dde5` | the "no value" grey from the CWP charts |
+| `On Hold` | `#8a99a8` | mid grey |
+| `Withdrawn` | `#4a5b6b` | dark grey |
+
+Categorical series (charts, multi-series) use the CWP set:
+`#1f6f8b · #F15A29 · #2a9d48 · #7048b6`.
+
+Surface tokens, so product sites and charts sit together:
+
+| Token | Value |
+|---|---|
+| background | `#05080f` |
+| ink | `#eef3f8` |
+| dim | `#a3b2c2` |
+| faint | `#77899b` |
+| hairline | `rgba(255,255,255,.10)` |
+
+Grey must never be used for a *known* status that matters: in the lot matrix,
+grey means "not sold and not available", and in the fitted map it means
+"drawn but not joinable" — the two are different meanings and are labelled as
+such on the page.
+
 ### 2.4 Entitlements (4 → 5)
 
 ```http

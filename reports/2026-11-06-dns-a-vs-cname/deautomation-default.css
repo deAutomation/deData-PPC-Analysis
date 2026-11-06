@@ -1,0 +1,56 @@
+@page {
+  size: A4;
+  margin: 28mm 18mm 18mm 18mm;
+  @top-left { content: none; }
+  @top-center { content: none; }
+  @top-right { content: none; }
+  @bottom-left { content: "CONFIDENTIAL"; color: #506377; font-family: Arial, sans-serif; font-size: 8.5pt; vertical-align: top; }
+  @bottom-center { content: "deAutomation Pty Ltd   ACN 703 041 310"; color: #506377; font-family: Arial, sans-serif; font-size: 7pt; vertical-align: top; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); color: #506377; font-family: Arial, sans-serif; font-size: 8.5pt; vertical-align: top; }
+}
+
+@page :first {
+  @top-right {
+    content: "";
+    width: 48mm;
+    height: 14mm;
+    background-image: url("deAutomation-hz-logo-1000px.png");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    vertical-align: middle;
+  }
+}
+
+html { color: #1d2b3a; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; line-height: 1.35; }
+body { margin: 0; }
+h1 { color: #173b5f; font-size: 22pt; line-height: 1.08; margin: 0 0 3mm; }
+h2 { color: #397ba6; font-size: 13pt; line-height: 1.2; margin: 5mm 0 2mm; padding-bottom: 1mm; border-bottom: 0.6pt solid #c9d8df; }
+h3 { color: #173b5f; font-size: 11.5pt; margin: 7mm 0 2mm; }
+.area-tag { display: inline-block; padding: 0.65mm 1.6mm; border-radius: 2mm; font-size: 7pt; font-weight: bold; letter-spacing: 0.45pt; line-height: 1; vertical-align: 1pt; }
+.area-qse { background: #fdf0cd; color: #7a5a1f; }
+.area-finance { background: #e5f0eb; color: #27634c; }
+.todoist-items + h3, h2 + h3 { margin-top: 2.5mm; }
+p { margin: 0 0 3.2mm; }
+table { border-collapse: collapse; margin: 2.5mm 0 3mm; width: 100%; font-size: 7.5pt; line-height: 1.2; }
+th { background: #173b5f; color: white; font-weight: bold; }
+th, td { border: 0.5pt solid #c9d8df; padding: 1.2mm 1.5mm; text-align: left; vertical-align: top; }
+tr:nth-child(even) td { background: #f4f8fa; }
+ul, ol { break-inside: avoid; margin: 0 0 3.2mm; padding-left: 6mm; }
+li { margin-bottom: 1.3mm; }
+.todoist-items { font-size: 7.8pt; line-height: 1.18; }
+.todoist-items ul { margin: 0 0 1.3mm; }
+.todoist-items li { margin-bottom: 0.45mm; }
+.todoist-items > ul > li { margin-bottom: 2.8mm; }
+.task-detail { display: block; margin-top: 0.6mm; }
+a { color: #397ba6; }
+code { color: #173b5f; font-family: "SFMono-Regular", Consolas, monospace; }
+
+/* Approved compact document default */
+@font-face { font-family: Arial; src: url("file:///System/Library/Fonts/Supplemental/Arial.ttf"); font-weight: 400; }
+@font-face { font-family: Arial; src: url("file:///System/Library/Fonts/Supplemental/Arial Bold.ttf"); font-weight: 700; }
+html { font-size: 9pt; line-height: 1.13; }
+h2 { font-size: 13pt; margin-top: 3mm; }
+li { margin-bottom: 0.8mm; }
+p { margin-bottom: 2mm; }
+@page { @bottom-center { content: "deAutomation Pty Ltd   ACN 703 041 310"; } }
