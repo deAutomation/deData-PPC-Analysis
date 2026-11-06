@@ -28,7 +28,7 @@ Two related record types matter here. **AAAA** is the same as A for IPv6. **ANAM
 
 | Name | Type | Value | Why |
 | --- | --- | --- | --- |
-| `data.deautomation.co` | A | `216.239.32.21`, `.34.21`, `.36.21`, `.38.21` | Apex of the delegated zone; must keep the SPF TXT and the product hosts beneath it |
+| `data.deautomation.co` | A | `216.239.32.21`<br>`216.239.34.21`<br>`216.239.36.21`<br>`216.239.38.21` | Apex of the delegated zone; must keep the SPF TXT and the product hosts beneath it |
 | `clients.deautomation.co` | A | The same four addresses | Same shape, already delegated to Cloud DNS |
 | `cwp.data.deautomation.co` | CNAME | `ghs.googlehosted.com.` | Product host pointing at Google's frontend; Google owns the addresses |
 | `ppc.data.deautomation.co` | CNAME | `ghs.googlehosted.com.` | Added 6 November for the new PPC site |
@@ -38,12 +38,14 @@ Two related record types matter here. **AAAA** is the same as A for IPv6. **ANAM
 
 The NS row is the one people miss. Delegation is not an address record at all: it says who to ask next. It is what lets us add `sgp.data` or `ops.data` later without touching Namecheap again.
 
+Both zones carry the same AAAA set, CAA policy (`pki.goog`, `letsencrypt.org`), DNSSEC and a family label; only `data` needs the SPF TXT. A record added to one zone should be checked against the other.
+
 ### What a resolver actually does for `ppc.data.deautomation.co`
 
 1. The stub resolver asks the root, then `.com`, then the `deautomation.co` nameservers at Namecheap.
 2. Namecheap returns the **NS** set for `data`: `ns-cloud-c1` through `ns-cloud-c4`.
 3. The resolver asks Google for `ppc.data`; the zone answers with a **CNAME** to `ghs.googlehosted.com.`
-4. The resolver asks for `ghs.googlehosted.com` and gets an **A** record — currently `192.178.187.121`.
+4. The resolver asks for `ghs.googlehosted.com` and gets an **A** record — `192.178.187.121` at the time of writing.
 5. The browser connects to that address, sends `ppc.data.deautomation.co` in the TLS handshake, and Google's frontend routes it to the `ppc-data` Cloud Run service.
 
 Until the Namecheap delegation exists, step 2 never reaches Google, so `ppc.data` is still NXDOMAIN — the CNAME exists only inside the new zone. That is the one reason the record is not live yet.
@@ -56,27 +58,26 @@ Until the Namecheap delegation exists, step 2 never reaches Google, so `ppc.data
 
 ### Why the product hosts are CNAMEs
 
-- Google owns `ghs.googlehosted.com` and its addresses. A CNAME means Google can move the frontend without us editing anything.
+- Google owns `ghs.googlehosted.com` and its addresses, so it can move the frontend without us editing anything.
 - Each product host is one mapping and one certificate; the CNAME is the only record the mapping needs.
-- It keeps the registrar out of routine work: adding a product is a record in `data-zone`, not a Namecheap edit.
+- Adding a product is a `data-zone` record, not a Namecheap edit.
 
 ### Traps worth remembering
 
 - Never put a CNAME at a zone apex. It looks tidy and breaks the zone.
 - A CNAME blocks every other record at that name: no TXT, no MX, no NS, no children. Mail and aliases cannot share a name.
 - `dig +short TXT cwp.data.deautomation.co` prints the CNAME target, not a TXT answer. Use `dig TXT +noall +answer` when checking mail records.
-- A CNAME adds a lookup and a failure point; keep it one hop, not a chain.
 - TTL matters on cutover day, not after: the old Namecheap records cached for 1800 seconds, the new zone uses 300.
 - Records are edited where they are authoritative. After delegation, a Namecheap A/TXT edit for `data` is a no-op.
 
 ### What changed on 6 November
 
-A `data-zone` was created in Cloud DNS and populated with the four apex addresses, the SPF TXT and the `cwp.data` CNAME before anything was touched at the registrar, so delegation cannot produce an empty zone. The `ppc.data` CNAME was added to the same zone and the Cloud Run mapping for it was created. The zone was verified directly against `ns-cloud-c1`. The remaining step is the delegation itself, which is a registrar action and cannot be automated with the credentials we hold.
+A `data-zone` was created and populated with every record `data` needs — A, AAAA, CAA, the SPF TXT and the `cwp.data` CNAME — before the registrar was touched, so delegation cannot point at an empty zone. The `ppc.data` CNAME and its Cloud Run mapping followed. The zone matches `clients-zone` in A, AAAA, CAA, DNSSEC and labelling, and was verified on `ns-cloud-c1`. Delegation is the only remaining step, and it is registrar-side.
 
 ## Next steps
 
-1. Replace the four `data` A records and the `data` TXT at Namecheap with four NS records for `ns-cloud-c1–c4.googledomains.com.`
-2. Confirm propagation with `dig NS data.deautomation.co` and `dig CNAME ppc.data.deautomation.co`.
+1. Add the four `data` NS records at Namecheap, and leave the A, TXT and `cwp.data` rows in place until delegation is confirmed.
+2. Confirm propagation with `dig NS data.deautomation.co` and `dig CNAME ppc.data.deautomation.co`; then delete the now-inert registrar copies so the Google zone is the only source.
 3. Allow 15–30 minutes for the `ppc.data` certificate, then check the mapping reports `Ready: True`.
 4. Add future product hosts (`sgp.data`, `ops.data`) as records in `data-zone`; the registrar is not involved again.
 

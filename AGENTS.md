@@ -42,7 +42,7 @@ that made the analysis exit with `need 2 full runs`. Both halves are fixed:
 ```
 deData-PPC-MasterplanDownloader  ->  gs://masterplans/ppc/masterplans/json/
 deData-PPC-ETL-Pipeline          ->  Firestore lic-data-452300 / PPC / masterplan-data
-ppc.data.deautomation.co         ->  reads Firestore + hub entitlements   [not built]
+ppc.data.deautomation.co         ->  Flask site: reads Firestore + hub   [local only]
 data.deautomation.co             ->  login, Stripe, entitlements
 ```
 
@@ -56,6 +56,24 @@ data.deautomation.co             ->  login, Stripe, entitlements
   `Australia/Adelaide`, Wednesdays.
 - This repo contributes nothing upstream. If an insight belongs in production,
   it goes into the ETL repo explicitly — never by pointing production at `_peet/`.
+
+## Product site
+`data.deautomation.co-ppc` (separate repo, same Flask + Firestore stack as CWP).
+It is the only thing that reads `PPC/masterplan-data`; this repo never does.
+
+- **Never bake the charts.** They read `/charts.json`, built per request from
+  Firestore under the entitlement check. A stale PNG misstates the snapshot date.
+- **Palette is a contract:** Sold `#F15A29`, Available `#1f6f8b`, Reserved
+  `#7048b6`, Future Release `#2a9d48`; greys are only for "not sold and not
+  available" or "drawn but not joinable".
+- **Grey must mean one thing per surface.** In the lot matrix it is "other
+  status"; on the fitted map it is "not joinable". The page says which.
+- **Entitlement fails closed** — hub unreachable returns 503, never access.
+  `DEV_BYPASS=1` is localhost only.
+- **Only village-green has fitted geometry**, and only 3 of its 338 drawn lots
+  join current inventory. Do not colour the rest as unsold.
+
+Site docs: the repo's own `README.md` and `AGENTS.md`.
 
 Full pattern: [`docs/ALTERNATIVE-DATA-STANDARD.md`](./docs/ALTERNATIVE-DATA-STANDARD.md).
 Current live state: [`docs/STATUS.md`](./docs/STATUS.md).

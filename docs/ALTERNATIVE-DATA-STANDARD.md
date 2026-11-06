@@ -124,7 +124,7 @@ CWP reports — and never a colour that could be mistaken for inventory.
 | `Sold` | `#F15A29` | the measured orange; the one colour that means sold |
 | `Available` | `#1f6f8b` | deep teal — primary inventory |
 | `Reserved` | `#7048b6` | purple — committed but not settled |
-| `Future Release` | `#c9d3dc` | light grey — drawn, not yet released |
+| `Future Release` | `#2a9d48` | green — drawn, not yet released |
 | `Unreleased` | `#d7dde5` | the "no value" grey from the CWP charts |
 | `On Hold` | `#8a99a8` | mid grey |
 | `Withdrawn` | `#4a5b6b` | dark grey |

@@ -12,7 +12,7 @@ separate chain, documented in
 |---|---|
 | Snapshotter | `deData-PPC-MasterplanDownloader` → `gs://masterplans/ppc/masterplans/json/` |
 | ETL → Firestore | `deData-PPC-ETL-Pipeline` → `PPC/masterplan-data/communities/{estate}` |
-| Product site | `ppc.data.deautomation.co` (planned — [`docs/PPC-GO-LIVE.md`](docs/PPC-GO-LIVE.md)) |
+| Product site | `data.deautomation.co-ppc` — **runs locally**, not deployed ([docs/PPC-GO-LIVE.md](docs/PPC-GO-LIVE.md)) |
 | Identity, Stripe, entitlements | `data.deautomation.co` |
 
 Nothing in this repo feeds production. It exists to work out what the data
@@ -45,6 +45,41 @@ them. It does now (`scripts/sync.py`), and the series has its first real number:
 **Estate masterplans — 27 estates, dated versions**
 
 ![Estate masterplans](_peet/masterplans/_contact_sheet.png)
+
+## The product site
+
+`data.deautomation.co-ppc` — Flask + Firestore, the same stack as CWP. It serves
+the ETL's output and holds no data of its own.
+
+```bash
+cd ../data.deautomation.co-ppc
+GOOGLE_APPLICATION_CREDENTIALS=~/.ssh/lic-data-452300-*.json \
+FIRESTORE_PROJECT=lic-data-452300 DEV_BYPASS=1 python3 app.py
+# http://127.0.0.1:5055
+```
+
+`DEV_BYPASS=1` skips the hub entitlement check **for localhost only** — on a
+deployed service the page redirects to the hub and 403s without a `ppc`
+entitlement.
+
+**Pages**
+
+| Route | What it shows |
+|---|---|
+| `/` | sales rate per week, inventory by status, every estate |
+| `/estate/<slug>` | lot status (one square per lot, by stage), sold vs available, lot map, weekly movement, asking prices |
+| `/charts.json` | the data every chart reads, live from Firestore |
+| `/geo/<slug>.geojson` | fitted lot geometry, where we have it |
+| `/api/estates`, `/api/estate/<slug>` | JSON |
+| `/health` | liveness |
+
+**Charts** are live from `/charts.json`, never baked images. Palette is the
+house key: Sold `#F15A29`, Available `#1f6f8b`, Reserved `#7048b6`,
+Future Release `#2a9d48` — see [`docs/ALTERNATIVE-DATA-STANDARD.md`](docs/ALTERNATIVE-DATA-STANDARD.md) §2.3a.
+
+**Lot map** exists for one estate (`village-green`): the plan's 338 lot positions
+fitted to the boundary ring at 91%, but only 3 lots join current inventory — the
+drawing is an earlier stage generation. Satellite toggle, off by default.
 
 ## What Peet publishes per lot
 
