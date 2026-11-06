@@ -320,20 +320,77 @@ def parcel_rings(slug):
     return out, (lat0, lng0)
 
 
+def _dominant_angle(xs, ys):
+    """Angle of the longest edge (mod 180°), in radians."""
+    n = len(xs)
+    best, blen = 0.0, -1.0
+    for i in range(n):
+        dx = xs[(i + 1) % n] - xs[i]
+        dy = ys[(i + 1) % n] - ys[i]
+        L = dx * dx + dy * dy
+        if L > blen:
+            blen = L
+            best = math.atan2(dy, dx) % math.pi
+    return best
+
+
 def residential(xy_list, lo=150, hi=3000):
     """Filter parcel rings to residential-size with bbox. Returns list of
-    (xs, ys, bbox, area)."""
+    (xs, ys, bbox, area, dominant_angle)."""
     res = []
     for xy, attrs in xy_list:
         xs = [p[0] for p in xy]; ys = [p[1] for p in xy]
         area = abs(sum(xs[i] * ys[(i + 1) % len(ys)] - xs[(i + 1) % len(xs)] * ys[i]
                        for i in range(len(xs))) / 2)
         if lo <= area <= hi:
-            res.append((xs, ys, (min(xs), min(ys), max(xs), max(ys)), area))
+            res.append((xs, ys, (min(xs), min(ys), max(xs), max(ys)), area,
+                        _dominant_angle(xs, ys)))
     return res
 
 
-def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250):
+def grid_rotation(shapes, parcels_m, nbins=180):
+    """Estimate plan->world rotation by aligning street grids.
+
+    Area/length-weighted edge-angle histograms (mod 180°) for plan shapes
+    vs nearby residential parcels; circular cross-correlation peak gives
+    the rotation (two candidates 180° apart). Returns (deg0, deg1).
+    """
+    import numpy as _np
+    ph = _np.zeros(nbins)
+    for pts in shapes.values():
+        n = len(pts)
+        for i in range(n):
+            dx = pts[(i + 1) % n][0] - pts[i][0]
+            # Negate dy: plan coords are y-down (SVG), world metres are y-up.
+            # The fitter maps +y->north, i.e. it vertically flips the drawing
+            # then rotates; measuring plan angles in y-up puts the estimate
+            # in the fitter's frame.
+            dy = -(pts[(i + 1) % n][1] - pts[i][1])
+            L = math.hypot(dx, dy)
+            if L > 0:
+                ph[int((math.atan2(dy, dx) % math.pi) / math.pi * nbins) % nbins] += L
+    wh = _np.zeros(nbins)
+    for xs, ys, _, _, _ in parcels_m:
+        n = len(xs)
+        for i in range(n):
+            dx = xs[(i + 1) % n] - xs[i]
+            dy = ys[(i + 1) % n] - ys[i]
+            L = math.hypot(dx, dy)
+            if L > 0:
+                wh[int((math.atan2(dy, dx) % math.pi) / math.pi * nbins) % nbins] += L
+    if ph.sum() == 0 or wh.sum() == 0:
+        return None
+    ph /= ph.sum()
+    wh /= wh.sum()
+    corr = _np.array([sum(ph[(i + k) % nbins] * wh[i] for i in range(nbins))
+                      for k in range(nbins)])
+    k = int(_np.argmax(corr))
+    deg = k / nbins * 180.0
+    return deg, (deg + 180.0) % 360.0
+
+
+def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250,
+                fixed_rots=None):
     """Coarse-to-fine search: translation around anchor, rotation, scale.
     Score = fraction of shape centroids inside a residential parcel with
     compatible area. Returns (project, meta)."""
@@ -354,9 +411,18 @@ def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250):
                          for i in range(n)) / 2))
     C = _np.array(cents)  # (L,2) plan-local rel centroid
     A_plan = _np.array(areas)
-    P = parcels_m  # list of (xs,ys,bbox,area)
-    bboxes = _np.array([b for _, _, b, _ in P])  # (P,4)
-    parea = _np.array([a for _, _, _, a in P])
+    # vertices rel shape centroid (for footprint-overlap scoring).
+    # cents[i] is rel the whole-plan centroid, so add (cx, cy) back to get
+    # the absolute shape centroid before subtracting.
+    VERTS = [[(x - (cents[i][0] + cx), y - (cents[i][1] + cy)) for x, y in pts]
+             for i, pts in enumerate(use.values())]
+    # plan dominant edge angles (mod pi)
+    plan_ang = _np.array([_dominant_angle([p[0] for p in pts], [p[1] for p in pts])
+                          for pts in use.values()])
+    P = parcels_m  # list of (xs,ys,bbox,area,angle)
+    bboxes = _np.array([b for _, _, b, _, _ in P])  # (P,4)
+    parea = _np.array([a for _, _, _, a, _ in P])
+    pang = _np.array([a for _, _, _, _, a in P])
     xs = [p[0] for p in allp]; ys = [p[1] for p in allp]
     plan_ext = max(max(xs) - min(xs), max(ys) - min(ys)) or 1
     if scale_seed is None:
@@ -376,21 +442,40 @@ def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250):
         ar = _np.abs(_np.log((A_plan * s * s)[:, None] / parea + 1e-9))
         hit = hit & (ar < math.log(3))
         idx = _np.argwhere(hit)  # (K,2)
-        good = 0
-        tested = set()
-        for li, pi in idx[:4000]:
+        # containing parcel per lot (first area-compatible parcel by bbox order)
+        cont = {}
+        for li, pi in idx[:6000]:
             li, pi = int(li), int(pi)
-            if li in tested:
+            if li in cont:
                 continue
-            pxs, pys, _, _ = P[pi]
+            pxs, pys, _, _, _ = P[pi]
             if point_in_ring(RX[li], RY[li], list(zip(pxs, pys))):
-                good += 1
-                tested.add(li)
-        # lots with no bbox hit count as miss
-        return good / max(len(C), 1)
+                cont[li] = pi
+        # vertex-in-parcel fraction: footprint overlap, not just centroid.
+        # Centroid-only scoring cannot distinguish twisted fits on regular
+        # grids (village-green 249deg scored higher yet straddles streets).
+        total = 0.0
+        for li, pts in enumerate(VERTS):
+            pi = cont.get(li)
+            if pi is None:
+                continue
+            pxs, pys, _, _, _ = P[pi]
+            ring = list(zip(pxs, pys))
+            inside = 0
+            for (vx, vy) in pts:
+                wx = RX[li] + (vx * ca - vy * sa) * s
+                wy = RY[li] + (vx * sa + vy * ca) * s
+                if point_in_ring(wx, wy, ring):
+                    inside += 1
+            total += inside / max(len(pts), 1)
+        return total / max(len(VERTS), 1)
 
-    best = (0, 0, 0, scale_seed)
-    for deg in range(0, 360, 15):
+    best = (0, 0.0, 0.0, 0, scale_seed)
+    # Full rotation sweep: grid estimates proved unreliable (frame flips),
+    # and the blind 15° sweep found every good fit so far. The vertex
+    # scorer below is the discriminator; the sweep is the explorer.
+    degs = list(range(0, 360, 15))
+    for deg in degs:
         for f in (0.5, 0.8, 1.2, 2.0):
             s = scale_seed * f
             for tx in range(-1500, 1501, 300):
@@ -399,14 +484,21 @@ def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250):
                     if sc > best[0]:
                         best = (sc, tx, ty, deg, s)
     sc, tx, ty, deg, s = best
-    # refine
-    for deg2 in range(deg - 14, deg + 15, 2):
+    # refine, wide first then fine
+    for deg2 in range(deg - 30, deg + 31, 3):
         for s2 in (s * 0.85, s, s * 1.18):
             for tx2 in (tx - 150, tx, tx + 150):
                 for ty2 in (ty - 150, ty, ty + 150):
                     sc2 = score_of(tx2, ty2, deg2, s2)
                     if sc2 > best[0]:
                         best = (sc2, tx2, ty2, deg2, s2)
+    sc, tx, ty, deg, s = best
+    for deg2 in range(deg - 3, deg + 4, 1):
+        for tx2 in (tx - 40, tx, tx + 40):
+            for ty2 in (ty - 40, ty, ty + 40):
+                sc2 = score_of(tx2, ty2, deg2, s)
+                if sc2 > best[0]:
+                    best = (sc2, tx2, ty2, deg2, s)
     sc, tx, ty, deg, s = best
     lat0, lng0 = anchor
     R = math.cos(math.radians(lat0))
@@ -451,8 +543,29 @@ def build_one(slug, project=None, meta=None):
     join_method = "staged"
     matched, bare = 0, 0
     feats, lot_feats = [], []
+    pins = {}
+    pinfile = pathlib.Path(f"{OUT}/fits.json")
+    if pinfile.exists():
+        pins = json.loads(pinfile.read_text()).get(slug, {})
     if project is None:
-        if pathlib.Path(f"{CAD}/{slug}.parcels.json").exists():
+        if pins.get("method") == "pinned":
+            lat0, lng0 = sales_anchor(slug)
+            R = math.cos(math.radians(lat0))
+            allp = [p for v in shapes.values() for p in v]
+            cx = sum(p[0] for p in allp) / len(allp)
+            cy = sum(p[1] for p in allp) / len(allp)
+            A = math.radians(pins["rotation_deg"])
+            ca, sa, sc = math.cos(A), math.sin(A), pins["scale"]
+            tx, ty = pins["tx_m"], pins["ty_m"]
+            def project(px, py, _cx=cx, _cy=cy, _s=sc, _la=lat0, _ln=lng0,
+                         _R=R, _ca=ca, _sa=sa, _tx=tx, _ty=ty):
+                dx, dy = (px - _cx) * _s, (py - _cy) * _s
+                return [_ln + (dx * _ca - dy * _sa + _tx) / (111320 * _R),
+                        _la + (dx * _sa + dy * _ca + _ty) / 111320]
+            meta = {"rotation_deg": pins["rotation_deg"], "scale": sc,
+                    "fit_inside": pins.get("fit_inside"),
+                    "tx_m": tx, "ty_m": ty, "method": "pinned"}
+        elif pathlib.Path(f"{CAD}/{slug}.parcels.json").exists():
             parcels, anchor = parcel_rings(slug)
             res = residential(parcels)
             project, meta = fit_parcels(shapes, res, anchor)

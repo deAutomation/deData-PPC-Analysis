@@ -1,0 +1,65 @@
+{
+ "village-green": {
+  "method": "pinned",
+  "rotation_deg": 332,
+  "scale": 1.7718156836809849,
+  "tx_m": 750,
+  "ty_m": 1500,
+  "fit_inside": 0.715,
+  "pinned_note": "visually verified: blocks on parcels"
+ },
+ "riverbank": {
+  "method": "pinned",
+  "rotation_deg": 353,
+  "scale": 0.3960756580962245,
+  "tx_m": -750,
+  "ty_m": 300,
+  "fit_inside": 0.56,
+  "pinned_note": "visually verified 2026-11-06: N+E blocks on parcels"
+ },
+ "flagstone": {
+  "method": "pinned",
+  "rotation_deg": 74,
+  "scale": 4.452834586540564,
+  "tx_m": 260,
+  "ty_m": 0,
+  "fit_inside": 0.341,
+  "pinned_note": "visually verified 2026-11-06: blocks on parcels"
+ },
+ "edens-crossing": {
+  "method": "pinned",
+  "rotation_deg": 165,
+  "scale": 3.082059843328624,
+  "tx_m": 0,
+  "ty_m": 600,
+  "fit_inside": 0.499,
+  "pinned_note": "visually verified 2026-11-06: blocks on parcels"
+ },
+ "jumping-creek": {
+  "method": "pinned",
+  "rotation_deg": 149,
+  "scale": 0.6799637352674524,
+  "tx_m": 860,
+  "ty_m": 1500,
+  "fit_inside": 0.56,
+  "pinned_note": "visually verified 2026-11-06: blocks on parcels"
+ },
+ "little-eagle-nudgee": {
+  "method": "pinned",
+  "rotation_deg": 280,
+  "scale": 0.4263073425170523,
+  "tx_m": 190,
+  "ty_m": -1460,
+  "fit_inside": 0.298,
+  "pinned_note": "visually verified 2026-11-06: rows on parcels"
+ },
+ "lily": {
+  "method": "pinned",
+  "rotation_deg": 150,
+  "scale": 2.4679170779861797,
+  "tx_m": -300,
+  "ty_m": 300,
+  "fit_inside": 0.025,
+  "pinned_note": "block outlines; position approximate, pinned for stability"
+ }
+}

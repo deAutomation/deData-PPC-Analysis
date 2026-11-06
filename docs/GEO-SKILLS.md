@@ -89,7 +89,38 @@ Writes into a secondary checkout (webapp, ETL) from a shell whose cwd is the
 primary workspace are denied — re-run the command with `workdir` set to the
 target repo root (foreground and background alike). Reads work from anywhere.
 
-## 7. Refit triggers (when to rebuild an estate)
+## 8. Rotation QA (learned 2026-11-06 — read before trusting a fit)
+
+Parcel-fit rotation can settle in local minima that look plausible in numbers
+but shear blocks across streets (riverbank 134°). Rules:
+
+- **Always render the verify overlay** (`scripts/verify_overlay.py`): blue
+  plan lots over tan residential parcels. Blocks must sit ON parcels with
+  matching street grain, not merely near them.
+- **Centroid-in-parcel scoring is blind on regular grids**: a twisted fit
+  still drops centroids in neighbouring parcels (VG 249° outscored the true
+  332°). Vertex-footprint scoring ranks better but its absolute values stay
+  low on schematic plans (wide drawn roads) — judge by eye, not by score.
+- **Abandoned approaches**: per-parcel edge-orientation agreement (drafting
+  conventions differ — VG's longest edges are side boundaries, parcels'
+  are frontages); global street-grid histogram (bbox mixes suburbs; also a
+  y-down/y-up frame trap in SVG coords).
+- **Pin verified fits** in `_peet/geo/fits.json`
+  (`{rotation_deg, scale, tx_m, ty_m}`); `build_one` uses pins verbatim.
+  Search proposes, human verifies, pin locks. Re-verify after any plan
+  version change.
+- **When to drop**: lily's plan draws block outlines, not lots, and every
+  fit scores ~0 — no map card (lot matrix covers it) beats a wrong map.
+
+- New `_MP_DDMMDD` SVG version on the `/for-sale/` page.
+- Fit score drops (plan extended into unsurveyed stages).
+- Feed stages rename (new `stage-remap` pairs).
+- Cadastre refresh (nightly upstream; re-pull bbox parcels).
+
+Command: `python3 scripts/build_geo.py <slug>` (+ preview auto-written),
+verify overlay, copy to webapp, run tests, push both repos.
+
+## 9. Refit triggers (when to rebuild an estate)
 
 - New `_MP_DDMMDD` SVG version on the `/for-sale/` page.
 - Fit score drops (plan extended into unsurveyed stages).
