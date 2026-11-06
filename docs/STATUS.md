@@ -13,7 +13,7 @@ should follow.
 | `deData-PPC-Analysis` | research (this repo) | active; not in the production path |
 | `data.deautomation.co` | hub: catalogue, login, Stripe, entitlements | deployed (`data-catalogue`) |
 | `data.deautomation.co-cwp` | CWP product site | deployed (`cwp-data`), healthy |
-| `data.deautomation.co-ppt` | PPC product site | **not created** |
+| `data.deautomation.co-ppc` | PPC product site | **deployed** (`ppc-data`) 2026-11-06; push-to-`main` CI/CD live |
 
 ## The data
 
@@ -43,9 +43,11 @@ first-time sales for the week ending 2026-11-06.
 |---|---|---|---|
 | `data-catalogue` | deautomation / asia-southeast1 | `data.deautomation.co` | `/health` and `/api/session` return **nginx 404** — the hub's app routes are not reachable behind this service |
 | `cwp-data` | deautomation / asia-southeast1 | `cwp.data.deautomation.co` | `/health` → `{"ok":true}`; `FIRESTORE_PROJECT=lic-data-452300` |
+| `ppc-data` | deautomation / asia-southeast1 | `ppc.data.deautomation.co` | deployed 2026-11-06; `/health` → `{"ok":true,"package":"ppc"}`; entitlement-gated pages 302 to hub sign-in |
 
 Domain mappings: `data.deautomation.co` → `data-catalogue`, `cwp.data.deautomation.co`
-→ `cwp-data`. No `ppt.` mapping.
+→ `cwp-data`, `ppc.data.deautomation.co` → `ppc-data` (certificate pending the
+`ppc.data` CNAME at Namecheap).
 
 ## Jobs and schedules
 
@@ -77,16 +79,26 @@ whatever runs it is outside this project's scheduler.
    `/health` and `/api/session`. Login and entitlements are unverified.
 4. **`ppc` not in `HUB_PACKAGES`** — add to the hub's `cloudbuild.yaml`
    (`cwp,sgp` → `cwp,sgp,ppc`); no other hub code change is needed to grant it.
-5. **PPC product site and `ppt.` domain** do not exist.
+5. **PPC DNS record missing.** `ppc-data` is deployed and the domain mapping
+   exists, but `ppc.data.deautomation.co` has no CNAME yet (`ppc.data` →
+   `ghs.googlehosted.com.` at Namecheap). Until then the Google URL
+   `https://ppc-data-dvcsnntjgq-as.a.run.app` is the only reachable host.
+   Until the hub is deployed, every page except `/health` is a fail-closed 503.
 6. **Stripe product** for PPC does not exist.
-7. **Revenue coverage** is structurally sparse: all 38 first-time sales moved
+7. **Lot geometry exists for one estate only.** `village-green` is fitted to its
+   boundary ring (91% of 338 lot labels inside) but only 3 lots join current
+   inventory — the published plan is an earlier stage generation. Served at
+   `/geo/village-green.geojson`. Method and limits: `_peet/geo/README.md`.
+8. **Revenue coverage** is structurally sparse: all 38 first-time sales moved
    `Reserved → Sold` without ever being published, so none had an asking price.
 
 ## Next, in order
 
-1. Deploy `ppc-etl-job` (push already done — CI builds it).
-2. Enable Cloud Scheduler; create `ppc-masterplan-weekly` (07:00) and
+1. Add the `ppc.data` CNAME at Namecheap, then wait for the mapping's
+   certificate (15–30 min).
+2. Deploy the hub's Python app (local commits pending) so `/api/entitlements`
+   answers; PPC's 503s become real sign-in redirects.
+3. Deploy `ppc-etl-job` (push already done — CI builds it).
+4. Enable Cloud Scheduler; create `ppc-masterplan-weekly` (07:00) and
    `ppc-etl-weekly` (09:00) in `Australia/Adelaide`.
-3. Fix or confirm the hub routes, then add `ppc` to `HUB_PACKAGES`.
-4. Build `data.deautomation.co-ppt` + map `ppc.data.deautomation.co`.
 5. Create the Stripe product/payment link, then flip the catalogue listing.
