@@ -70,8 +70,11 @@ It is the only thing that reads `PPC/masterplan-data`; this repo never does.
   status"; on the fitted map it is "not joinable". The page says which.
 - **Entitlement fails closed** — hub unreachable returns 503, never access.
   `DEV_BYPASS=1` is localhost only.
-- **Only village-green has fitted geometry**, and only 3 of its 338 drawn lots
-  join current inventory. Do not colour the rest as unsold.
+- **17 estates have fitted lot geometry** (`*.smart.geojson`, polygons with
+  live status). Georeference tiers: state-cadastre parcel fit (QLD/NSW) >
+  `mapConfig` ring fit (approximate — the ring is decorative and can sit
+  ~700 m off) > sales-centre-anchored schematic. Grey on the fitted map is
+  "drawn but not joinable"; the page states method + join count per estate.
 
 Site docs: the repo's own `README.md` and `AGENTS.md`.
 
@@ -151,22 +154,25 @@ Regenerate: `_peet/fs_survey.py` → `_peet/render_svgs.py`. Raw inputs in
 `_peet/fs/`, `_peet/maps/`, `_peet/pdf/`; full-res in `_peet/_hires/` — all
 git-ignored.
 
-## No cadastre from Peet's own data
-Peet exposes **no lot polygons** anywhere:
+## Cadastre: not from Peet, but from the states (solved 2026-11-06)
+Peet exposes **no lot polygons** itself (`mapConfig` rings are decorative —
+proven ~700 m off at village-green; no capsule buckets). Real geometry comes
+from open state services, cached per estate in `_peet/cadastre/`:
 
-- `mapConfig.mapCoordinates` is an estate boundary ring on only 8 of 34 estates
-  (74 points total) — a rough hull, not a survey boundary.
-- The page's masterplan is a raster PNG on `peet.com.au` (or the SVG above);
-  neither is georeferenced.
-- No capsule buckets: `{estate}-capsule` returns `NoSuchBucket` for every Peet
-  estate tested, and the pages reference no capsule bundle. (Cedar Woods'
-  estates do have `{project}-capsule` buckets with real lot polygons — Peet's
-  WordPress/Dynamics stack has no equivalent.)
+- **QLD** (`spatial-gis.information.qld.gov.au/.../LandParcelPropertyFramework/4/query`):
+  layer 4 `Cadastral parcels` (layer 1 is a group layer and 400s on query).
+  Point query needs `where=1=1` + geometry; paging is by `objectid` ranges,
+  not `resultOffset`. Filter `parcel_typ <> 'Road Type Parcel'`, keep
+  150–3,000 m² as residential. Field is lowercase `objectid`.
+- **NSW** (`maps.six.nsw.gov.au/.../NSW_Cadastre/9/query`): layer 9 `Lot`,
+  envelope order `xmin,ymin,xmax,ymax`, `resultOffset` paging works,
+  `lotnumber`/`planlabel`/`shape_Area` fields.
+- VIC/WA/SA: no open endpoint found (VIC 403, WA keyed, SA unclear) — those
+  estates ship as ring-fit or sales-centre-anchored schematics.
 
-Routes to real geometry, if ever needed: state cadastre (QLD's DCDB is queryable
-free via `spatial-gis.information.qld.gov.au` and returns `lot/plan`), joined by
-estate + plan number; or ask Peet for the Runway capsule. `lot_number` alone is
-a marketing number, so joins are not automatic.
+`lot_number` is a marketing number, so there is no per-lot cadastre join —
+instead the whole plan is fitted at once (share of lot centroids inside
+residential parcels with compatible area). See `_peet/geo/README.md`.
 
 ## Runway `sog-p2` — the `Peet/` prefix (resolved)
 One anonymous `ListBucket` on Runway's shared bucket exposed a `Peet/` prefix

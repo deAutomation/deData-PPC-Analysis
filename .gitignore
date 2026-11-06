@@ -21,3 +21,8 @@ _peet/*.html
 _peet/svg_sheet.png
 _peet/check4.png
 _peet/contact_sheet.png
+
+# lot-geometry build artefacts: re-fetchable cadastre, regenerable previews
+_peet/cadastre/
+_peet/geo/*-preview.png
+_peet/geo/*-verify.png

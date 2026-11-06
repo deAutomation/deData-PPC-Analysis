@@ -1,53 +1,64 @@
-# Lot geometry — what can be georeferenced, and what can't
+# Lot geometry — real footprints for 17 estates
 
-Peet publishes **no lot polygons**. The only vector source is the `/for-sale/` SVG
-map, which draws lots as shapes but labels them in a separate `Numbers_*` layer as
-bare numbers at x/y. Those label anchors are what we can recover.
+Peet publishes **no lot polygons**. The only vector source is the `/for-sale/`
+SVG map, which draws every lot as a shape (`rect`/`polygon`/`polyline`/`path`
+with `lot_<n>` ids inside `stage_*` groups) and labels it in a separate
+`Numbers_*` layer. We recover the shapes, not just the label anchors.
 
-## Method (village-green, worked end-to-end)
+## Pipeline (`scripts/build_geo.py`)
 
-1. Parse `id="lot_name_<n>"` inside each `Numbers_<Estate>_Stage_<n>` group:
-   338 labels, each with `translate(x y)` and a `tspan` holding the lot number.
-2. Take the estate boundary from the live page's `mapConfig.mapCoordinates`
-   (23 points) and project both to local metres around the centroid.
-3. Search rotation (280–310°) and scale, scoring candidates by the share of lot
-   labels that land inside the boundary ring.
-4. Best fit: **rotation 288°, scale 2.44, 91.1% of labels inside**.
+1. **Parse** `_peet/maps/<slug>.svg`: shapes by `(stage-group, lot-number)`,
+   both label dialects (`<text id="lot_name_N">`, `<g id="lot_name_N">`),
+   path `d` flattened (lines + subdivided curves).
+2. **Join** live feed `_peet/live/<slug>.json` on normalised
+   `(stage, lot-number)`. Normaliser strips estate tokens anywhere, maps
+   `4_Release_1 → 4A` etc. Fallbacks in order: staged → stage-remap (equal
+   group counts, e.g. plan 1–6 vs feed 301–306) → bare-renumber (plan has no
+   stage split). Join method is recorded per file; bare joins require unique
+   numbers.
+3. **Georeference**, best anchor available:
+   - `parcel-scored` — fit plan to state cadastre (QLD ArcGIS, NSW Six Maps).
+     Coarse-to-fine search on translation/rotation/scale; score = share of
+     lot centroids inside residential parcels with compatible area. Parcels
+     cached in `_peet/cadastre/<slug>.parcels.json`.
+   - `ring-centroid` — rotation/scale search scoring % inside the
+     `mapConfig` ring, centroid-aligned. Used where no cadastre (VIC/WA).
+   - `anchor-envelope` — schematic: plan centred on the sales-centre anchor,
+     scale ≈ estate/plan extent. Positions are illustrative.
+4. **Emit** `_peet/geo/<slug>.smart.geojson`: 1 boundary feature (ring, or
+   plan-envelope hull) + N lot polygons with `{lot_number, matched, status,
+   stage}`. Plus `-smart-preview.png` and `-verify.png` (lots over parcels).
 
-## Result
+## Key correction
 
-| | |
-|---|---|
-| Features | 1 boundary polygon + 338 lot points |
-| Fit quality | 91.1% inside ring |
-| Joined to current inventory | **3 of 338** |
-| Plan generation | Stage 1, 2, 3, 4 Release 1, 4 Release 2, 5, 6, 7 |
-| Current feed stages | Stage 4A, 4B, 13B, 7, 3, 2C |
+The `mapConfig` ring is **decorative**. At village-green the ring fit scored
+98.5% inside yet sat ~700 m off the true subdivision; the parcel fit drops
+blocks exactly onto surveyed parcels. Parcel-fit positions win wherever
+cadastre exists; ring-fit positions are approximate.
 
-**The drawing is an older generation than the inventory.** Lot numbers are reused
-across stages, so a bare-number join produces false matches (a naive join claimed
-49, of which only 3 survive a stage-aware join). Status colouring is therefore
-withheld for the rest: grey means *drawn but not joinable*, not *unsold*.
+## Coverage (2026-11-06)
 
-## Where this works better
+| Estate | Method | Polygons | Joined | Note |
+|---|---|---|---|---|
+| flagstone | parcel | 2146 | 397 | stage generations overlap well |
+| edens-crossing | parcel | 1071 | 54 | |
+| riverbank | parcel | 778 | 83 | |
+| village-green | parcel | 337 | 49 | ring discarded (700 m off) |
+| lily | parcel | 36 | 8 | block outlines, not lots |
+| jumping-creek | parcel | 208 | 37 | NSW cadastre |
+| newhaven | ring | 1308 | 285 | |
+| elmslie-common | ring | 60 | 60 | single plan group |
+| glendalough | ring | 100 | 100 | stage-remap 1–6 → 301–306 |
+| little-eagle-nudgee | ring | 82 | 51 | bare-renumber |
+| cornerstone | anchor | 709 | 75 | |
+| elavale | anchor | 494 | 271 | |
+| ellery | anchor | 262 | 253 | |
+| golden-bay | anchor | 1265 | 248 | |
+| lakelands | anchor | 997 | 260 | |
+| millers-row | anchor | 71 | 34 | bare-renumber |
+| the-avenue-estate | anchor | 684 | 339 | |
+| yanchep-golf-estate | anchor | 730 | 279 | |
 
-Stage-aware matching across the 20 estates with map SVGs:
-
-| Estate | Stage-matched lots |
-|---|---|
-| flagstone | **399 / 2745** |
-| elavale | 275 / 1308 |
-| lakelands | 55 / 269 |
-| village-green | 3 / 246 |
-
-Flagstone is the candidate for a real lot-status map: enough stages still align
-that sold/available colouring would be meaningful.
-
-## Honest limits
-
-- Coordinates come from a drawing fitted to a **boundary ring**, not a cadastre.
-  Expect metres of error, and no parcel boundaries.
-- Only 8 of 34 estates publish a boundary ring at all; the other 12 with maps
-  have no anchor and stay in plan-local coordinates.
-- True lot polygons and true positions need the state cadastre (QLD DCDB is free)
-  or the Runway capsule from Peet.
+No geometry: aston + bluestone-mt-barker (pin SVGs, zero lot shapes),
+vantage (aerial PDF only). Grey on the map always means "drawn but not
+joinable", never "unsold".

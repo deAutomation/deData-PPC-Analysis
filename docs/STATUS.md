@@ -41,13 +41,14 @@ first-time sales for the week ending 2026-11-06.
 
 | Service | Project / region | Host | Note |
 |---|---|---|---|
-| `data-catalogue` | deautomation / asia-southeast1 | `data.deautomation.co` | `/health` and `/api/session` return **nginx 404** — the hub's app routes are not reachable behind this service |
+| `data-catalogue` | deautomation / asia-southeast1 | `data.deautomation.co` | Python hub live 2026-11-06; `/health` → `{"ok":true,"store":"FirestoreStore"}`; `/api/session` → `{"signed_in":false}`; `/api/entitlements?package=ppc` → 401 |
 | `cwp-data` | deautomation / asia-southeast1 | `cwp.data.deautomation.co` | `/health` → `{"ok":true}`; `FIRESTORE_PROJECT=lic-data-452300` |
 | `ppc-data` | deautomation / asia-southeast1 | `ppc.data.deautomation.co` | deployed 2026-11-06; `/health` → `{"ok":true,"package":"ppc"}`; entitlement-gated pages 302 to hub sign-in |
 
 Domain mappings: `data.deautomation.co` → `data-catalogue`, `cwp.data.deautomation.co`
-→ `cwp-data`, `ppc.data.deautomation.co` → `ppc-data` (certificate pending the
-`ppc.data` CNAME at Namecheap).
+→ `cwp-data`, `ppc.data.deautomation.co` → `ppc-data` (certificate ready).
+DNS: `data.deautomation.co` is delegated to Cloud DNS `data-zone`
+(`ns-cloud-c1–c4`); `clients.deautomation.co` stays in `clients-zone`.
 
 ## Jobs and schedules
 
@@ -75,30 +76,47 @@ whatever runs it is outside this project's scheduler.
    workstation. Until `ppc-etl-job` runs on a schedule, Firestore will stop
    updating after the current snapshots.
 2. **No scheduler** — neither downloader nor ETL has a trigger recorded here.
-3. **Hub app routes unreachable** — `data-catalogue` serves nginx 404 on
-   `/health` and `/api/session`. Login and entitlements are unverified.
-4. **`ppc` not in `HUB_PACKAGES`** — add to the hub's `cloudbuild.yaml`
-   (`cwp,sgp` → `cwp,sgp,ppc`); no other hub code change is needed to grant it.
-5. **PPC DNS record missing.** `ppc-data` is deployed and the domain mapping
-   exists, but `ppc.data.deautomation.co` has no CNAME yet (`ppc.data` →
-   `ghs.googlehosted.com.` at Namecheap). Until then the Google URL
-   `https://ppc-data-dvcsnntjgq-as.a.run.app` is the only reachable host.
-   Until the hub is deployed, every page except `/health` is a fail-closed 503.
+3. **Hub mail secrets missing.** The hub is live and Firestore-backed, and the
+   full magic-link flow was proven end to end on 6 Nov by surfacing the link in
+   logs: `/auth/verify` → 302 to `/account`, `da_session` set for
+   `.data.deautomation.co`, `/api/entitlements?package=ppc` returns the package,
+   and `ppc.data` then serves 200 (sign-out returns it to 302). What is missing
+   is the Mailgun key: no `mailgun-api-key` secret exists, so a real buyer's
+   email is never sent. The key was exposed in a chat transcript and must be
+   rotated first. The admin console also needs `google-oauth-secret`, and
+   Stripe needs `stripe-webhook-secret`.
+4. **`ppc` is in `HUB_PACKAGES`** — the deployed hub lists `cwp,sgp,ppc` and
+   returns the `ppc` entitlement for a seeded account (verified end to end).
+5. **PPC site is live and gated.** `ppc.data.deautomation.co` serves a GTS
+   certificate; `/` 302s to the real hub login; `/health` → 200; a valid
+   `ppc` entitlement returns 200 and `/charts.json`; a bad cookie is
+   rejected to the hub login (302), and 503 is reserved for an unreachable hub. No standing test session was left behind (a manual entitlement
+   remains for the owner). The reusable procedure is
+   `deautomation-data/development-pipeline/PRODUCT-HOST-RUNBOOK.md`.
 6. **Stripe product** for PPC does not exist.
-7. **Lot geometry exists for one estate only.** `village-green` is fitted to its
-   boundary ring (91% of 338 lot labels inside) but only 3 lots join current
-   inventory — the published plan is an earlier stage generation. Served at
-   `/geo/village-green.geojson`. Method and limits: `_peet/geo/README.md`.
+7. **Lot geometry now covers 17 estates.** `scripts/build_geo.py` parses real
+   lot footprints from the `/for-sale/` SVG stage groups, joins live feed on
+   stage + number, and georeferences by the best available anchor: state
+   cadastre parcel fit (QLD/NSW: flagstone, edens-crossing, riverbank,
+   village-green, lily, jumping-creek), `mapConfig` ring fit (newhaven,
+   elmslie-common, glendalough, little-eagle-nudgee), or sales-centre-anchored
+   schematic (cornerstone, elavale, ellery, golden-bay, lakelands,
+   millers-row, the-avenue-estate, yanchep-golf-estate). Served as
+   `/geo/<slug>.geojson` (smart polygons) with per-method honesty copy on the
+   estate page. No geometry for aston / bluestone-mt-barker (pin SVGs, no
+   lot shapes) or vantage (aerial PDF only). Method and limits:
+   `_peet/geo/README.md`. Key correction: the `mapConfig` ring is decorative
+   and can sit ~700 m off the true subdivision (proven at village-green) —
+   parcel-fit positions win wherever cadastre exists.
 8. **Revenue coverage** is structurally sparse: all 38 first-time sales moved
    `Reserved → Sold` without ever being published, so none had an asking price.
 
 ## Next, in order
 
-1. Add the `ppc.data` CNAME at Namecheap, then wait for the mapping's
-   certificate (15–30 min).
-2. Deploy the hub's Python app (local commits pending) so `/api/entitlements`
-   answers; PPC's 503s become real sign-in redirects.
-3. Deploy `ppc-etl-job` (push already done — CI builds it).
-4. Enable Cloud Scheduler; create `ppc-masterplan-weekly` (07:00) and
+1. Create the `mailgun-api-key` secret (and `google-oauth-secret`,
+   `stripe-webhook-secret` when those surfaces are needed) so hub sign-in can
+   send links.
+2. Deploy `ppc-etl-job` (push already done — CI builds it).
+3. Enable Cloud Scheduler; create `ppc-masterplan-weekly` (07:00) and
    `ppc-etl-weekly` (09:00) in `Australia/Adelaide`.
-5. Create the Stripe product/payment link, then flip the catalogue listing.
+4. Create the Stripe product/payment link, then flip the catalogue listing.
