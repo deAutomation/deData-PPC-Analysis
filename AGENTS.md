@@ -37,6 +37,29 @@ Markdown pack + charts out.
 that made the analysis exit with `need 2 full runs`. Both halves are fixed:
 `sync.py` decompresses, `weekly.py` accepts either form.
 
+## Production chain (this repo is not in it)
+
+```
+deData-PPC-MasterplanDownloader  ->  gs://masterplans/ppc/masterplans/json/
+deData-PPC-ETL-Pipeline          ->  Firestore lic-data-452300 / PPC / masterplan-data
+ppt.data.deautomation.co         ->  reads Firestore + hub entitlements   [not built]
+data.deautomation.co             ->  login, Stripe, entitlements
+```
+
+- **Data project:** `lic-data-452300`, database `(default)`, Firestore **Native**,
+  `australia-southeast2`. One collection per company: `ADL · CWP · LIC · PPC · SGP · _users`.
+  `FIRESTORE_PROJECT=lic-data-452300` is mandatory.
+- **Not** `deautomation` (62119154094) — that project hosts the services and its
+  default database is Datastore mode, which the Firestore client refuses.
+- **Scheduling:** each ETL has its own trigger, a unique slot in the family, ≥2 h
+  after that company's downloader. PPC: download 07:00 → ETL 09:00
+  `Australia/Adelaide`, Wednesdays.
+- This repo contributes nothing upstream. If an insight belongs in production,
+  it goes into the ETL repo explicitly — never by pointing production at `_peet/`.
+
+Full pattern: [`docs/ALTERNATIVE-DATA-STANDARD.md`](./docs/ALTERNATIVE-DATA-STANDARD.md).
+Current live state: [`docs/STATUS.md`](./docs/STATUS.md).
+
 ## Lot masterdata source
 Peet serves lot masterdata **first-party**: their WordPress backend
 (`peet` theme, multisite) embeds the full inventory server-side in each
@@ -162,10 +185,16 @@ movement over labels.
   any estate-level aggregation by hand.
 
 ## Snapshot cadence
-- **Designed: weekly.** Cloud Scheduler → Cloud Run Job (`LOCAL=0`,
-  600s timeout). The schedule itself is not versioned in either repo.
-- Observed: two full 33-estate runs on 2026-10-24 (plus `TESTING=1` probes).
-  `reports/history.csv` has a single row — the weekly series starts here.
+- **Weekly.** Downloader fires 07:00 `Australia/Adelaide` Wednesdays (observed:
+  `2026-10-30_07-00-19`, `2026-11-06_07-00-22`).
+- Observed runs in `gs://masterplans/ppc/masterplans/json/`: three —
+  2026-10-24 (33 estates), 2026-10-30 (35), 2026-11-06 (35).
+  Earlier note that only one run existed was wrong: the job was running, the
+  repo was not syncing.
+- `reports/history.csv` has two rows (2026-10-24, 2026-11-06). Every week since
+  should append one; a missing week is a sync failure, not a data gap.
+- The Cloud Scheduler entry itself is infrastructure, not repo configuration —
+  see `docs/PPT-GO-LIVE.md` §3.
 
 ## Vanished estates (delisting ≠ sale)
 - The downloader **rebuilds its estate list live every run** (index ∪ robots).
