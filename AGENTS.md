@@ -129,7 +129,7 @@ a marketing number, so joins are not automatic.
 
 ## Runway `sog-p2` — the `Peet/` prefix (resolved)
 One anonymous `ListBucket` on Runway's shared bucket exposed a `Peet/` prefix
-(#128 of 189). Enumerated 2026-11-06: **3,651 objects, 1.37 GB, 3,591 folders**,
+(#128 of 189). Enumerated 2026-11-06: **3,653 objects, 1.37 GB, 3,591 folders**,
 all dated **2017-07 → 2018-12**, types jpg/png/pdf/gif only — **no SVG, no
 GeoJSON, no lot status, no cadastre**. Content is estate marketing artwork
 (façades, elevations, floorplans) plus 109 PDFs, 91 of them lot-specific site
