@@ -389,6 +389,50 @@ def grid_rotation(shapes, parcels_m, nbins=180):
     return deg, (deg + 180.0) % 360.0
 
 
+def _poly_clip(subject, clip):
+    """Sutherland–Hodgman clip against a (possibly CW) polygon."""
+    out = list(subject)
+    n = len(clip)
+    if n < 3 or not out:
+        return []
+    # clip winding: positive = CCW
+    w = sum(clip[i][0] * clip[(i + 1) % n][1] -
+            clip[(i + 1) % n][0] * clip[i][1] for i in range(n))
+    sgn = 1.0 if w >= 0 else -1.0
+    for i in range(n):
+        ax, ay = clip[i]
+        bx, by = clip[(i + 1) % n]
+        edgex, edgey = bx - ax, by - ay
+        new = []
+        if not out:
+            return []
+        sx, sy = out[-1]
+        for ex, ey in out:
+            def side(px, py):
+                return sgn * (edgex * (py - ay) - edgey * (px - ax))
+            se, ss = side(ex, ey), side(sx, sy)
+            if se >= 0 and ss >= 0:
+                new.append((ex, ey))
+            elif se >= 0 > ss:
+                t = ss / (ss - se + 1e-12)
+                new.append((sx + (ex - sx) * t, sy + (ey - sy) * t))
+                new.append((ex, ey))
+            elif se < 0 <= ss:
+                t = ss / (ss - se + 1e-12)
+                new.append((sx + (ex - sx) * t, sy + (ey - sy) * t))
+            sx, sy = ex, ey
+        out = new
+    return out
+
+
+def _poly_area(pts):
+    n = len(pts)
+    if n < 3:
+        return 0.0
+    return abs(sum(pts[i][0] * pts[(i + 1) % n][1] -
+                   pts[(i + 1) % n][0] * pts[i][1] for i in range(n)) / 2)
+
+
 def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250,
                 fixed_rots=None):
     """Coarse-to-fine search: translation around anchor, rotation, scale.
@@ -451,24 +495,15 @@ def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250,
             pxs, pys, _, _, _ = P[pi]
             if point_in_ring(RX[li], RY[li], list(zip(pxs, pys))):
                 cont[li] = pi
-        # vertex-in-parcel fraction: footprint overlap, not just centroid.
-        # Centroid-only scoring cannot distinguish twisted fits on regular
-        # grids (village-green 249deg scored higher yet straddles streets).
+        # RULE: centroid-in-parcel. Tried and abandoned: vertex fractions
+        # (flat ~0.25 everywhere on schematic plans), per-parcel orientation
+        # (drafting conventions differ), IoU (marketing drawings aren't
+        # survey-exact; noise decides). Centroid + area finds the true family;
+        # pins lock it. See GEO-SKILLS §8.
         total = 0.0
-        for li, pts in enumerate(VERTS):
-            pi = cont.get(li)
-            if pi is None:
-                continue
-            pxs, pys, _, _, _ = P[pi]
-            ring = list(zip(pxs, pys))
-            inside = 0
-            for (vx, vy) in pts:
-                wx = RX[li] + (vx * ca - vy * sa) * s
-                wy = RY[li] + (vx * sa + vy * ca) * s
-                if point_in_ring(wx, wy, ring):
-                    inside += 1
-            total += inside / max(len(pts), 1)
-        return total / max(len(VERTS), 1)
+        for li in cont:
+            total += 1.0
+        return total / max(len(C), 1)
 
     best = (0, 0.0, 0.0, 0, scale_seed)
     # Full rotation sweep: grid estimates proved unreliable (frame flips),
@@ -484,6 +519,26 @@ def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250,
                     if sc > best[0]:
                         best = (sc, tx, ty, deg, s)
     sc, tx, ty, deg, s = best
+    # RULE: area-calibrate scale. Schematic plans are drawn at an arbitrary
+    # scale; the median parcel/plan area ratio of contained lots gives the
+    # true scale directly (measured 1.52x at village-green = 23% small).
+    ratios = []
+    A = math.radians(deg)
+    ca, sa = math.cos(A), math.sin(A)
+    RX = C[:, 0] * s * ca - C[:, 1] * s * sa + tx
+    RY = C[:, 0] * s * sa + C[:, 1] * s * ca + ty
+    x0, y0, x1, y1 = bboxes[:, 0], bboxes[:, 1], bboxes[:, 2], bboxes[:, 3]
+    hit = ((RX[:, None] >= x0) & (RX[:, None] <= x1) &
+           (RY[:, None] >= y0) & (RY[:, None] <= y1))
+    ar = _np.abs(_np.log((A_plan * s * s)[:, None] / parea + 1e-9))
+    for li, pi in _np.argwhere(hit & (ar < math.log(3)))[:6000]:
+        li, pi = int(li), int(pi)
+        pxs, pys, _, _, _ = P[pi]
+        if point_in_ring(RX[li], RY[li], list(zip(pxs, pys))):
+            ratios.append(P[pi][3] / max(A_plan[li] * s * s, 1e-9))
+    if ratios:
+        import statistics as _st
+        s = s * math.sqrt(_st.median(ratios))
     # refine, wide first then fine
     for deg2 in range(deg - 30, deg + 31, 3):
         for s2 in (s * 0.85, s, s * 1.18):
@@ -493,12 +548,16 @@ def fit_parcels(shapes, parcels_m, anchor, scale_seed=None, max_lots=250,
                     if sc2 > best[0]:
                         best = (sc2, tx2, ty2, deg2, s2)
     sc, tx, ty, deg, s = best
-    for deg2 in range(deg - 3, deg + 4, 1):
-        for tx2 in (tx - 40, tx, tx + 40):
-            for ty2 in (ty - 40, ty, ty + 40):
-                sc2 = score_of(tx2, ty2, deg2, s)
-                if sc2 > best[0]:
-                    best = (sc2, tx2, ty2, deg2, s)
+    # RULE: fine polish. Coarse steps (300m/15°/~18% scale) strand fits;
+    # polish translation ±120m @ 20m, scale ±12% @ 3%, rotation ±4° @ 1°.
+    for deg2 in range(deg - 4, deg + 5, 1):
+        for f2 in (0.88, 0.91, 0.94, 0.97, 1.0, 1.03, 1.06, 1.09, 1.12):
+            s2 = s * f2
+            for tx2 in range(tx - 120, tx + 121, 20):
+                for ty2 in range(ty - 120, ty + 121, 20):
+                    sc2 = score_of(tx2, ty2, deg2, s2)
+                    if sc2 > best[0]:
+                        best = (sc2, tx2, ty2, deg2, s2)
     sc, tx, ty, deg, s = best
     lat0, lng0 = anchor
     R = math.cos(math.radians(lat0))

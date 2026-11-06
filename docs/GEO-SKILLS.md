@@ -97,14 +97,19 @@ but shear blocks across streets (riverbank 134°). Rules:
 - **Always render the verify overlay** (`scripts/verify_overlay.py`): blue
   plan lots over tan residential parcels. Blocks must sit ON parcels with
   matching street grain, not merely near them.
-- **Centroid-in-parcel scoring is blind on regular grids**: a twisted fit
-  still drops centroids in neighbouring parcels (VG 249° outscored the true
-  332°). Vertex-footprint scoring ranks better but its absolute values stay
-  low on schematic plans (wide drawn roads) — judge by eye, not by score.
-- **Abandoned approaches**: per-parcel edge-orientation agreement (drafting
+- **The scorer is centroid-in-parcel + area prefilter — nothing fancier.**
+  Tried and REVERTED, in order: per-lot orientation agreement (drafting
   conventions differ — VG's longest edges are side boundaries, parcels'
-  are frontages); global street-grid histogram (bbox mixes suburbs; also a
-  y-down/y-up frame trap in SVG coords).
+  frontages, so it confidently preferred wrong fits); street-grid histogram
+  alignment (bbox mixes neighbouring suburbs; also an SVG y-down frame trap
+  in plan angle measurement); vertex-in-parcel fractions (flat ~0.25
+  everywhere on schematic plans); polygon IoU (marketing drawings aren't
+  survey-exact — a wrong 51° fit outscored the true 332°). All documented
+  here so nobody retries them.
+- **Scale calibration that works**: after the coarse search, take the median
+  parcel/plan area ratio of contained lots and multiply scale by its square
+  root before refine (measured 1.52x at village-green = plan drawn 23%
+  small). Real areas beat extent-guessing (the 1.5 km-estate seed).
 - **Pin verified fits** in `_peet/geo/fits.json`
   (`{rotation_deg, scale, tx_m, ty_m}`); `build_one` uses pins verbatim.
   Search proposes, human verifies, pin locks. Re-verify after any plan

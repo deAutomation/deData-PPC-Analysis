@@ -1,13 +1,4 @@
 {
- "village-green": {
-  "method": "pinned",
-  "rotation_deg": 332,
-  "scale": 1.7718156836809849,
-  "tx_m": 750,
-  "ty_m": 1500,
-  "fit_inside": 0.715,
-  "pinned_note": "visually verified: blocks on parcels"
- },
  "riverbank": {
   "method": "pinned",
   "rotation_deg": 353,
@@ -61,5 +52,14 @@
   "ty_m": 300,
   "fit_inside": 0.025,
   "pinned_note": "block outlines; position approximate, pinned for stability"
+ },
+ "village-green": {
+  "method": "pinned",
+  "rotation_deg": 332,
+  "scale": 1.7718156836809849,
+  "tx_m": 750,
+  "ty_m": 1500,
+  "fit_inside": 0.715,
+  "pinned_note": "visually verified: blocks on parcels"
  }
 }
