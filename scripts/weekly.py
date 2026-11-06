@@ -16,8 +16,10 @@
 import argparse
 import csv
 import glob
+import gzip
 import json
 import os
+import re
 from collections import Counter, defaultdict
 from datetime import datetime
 
@@ -28,9 +30,34 @@ import matplotlib.pyplot as plt
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOLD = {'7'}
 
+# Quarantined slugs: parsed for reference but NEVER counted in velocity.
+# spring-mountain's lotConfig is a leaked aggregate of OTHER estates' lots
+# (lot names point at Forestville, Yanchep, Tonsley...). Diffing it would
+# double-count movements already measured in those estates.
+QUARANTINE = {'spring-mountain'}
+
+
+def _snapshot_files(snapdir):
+    """Snapshot files, plain or gzipped. GCS stores them as .json.gz."""
+    return sorted(glob.glob(os.path.join(snapdir, '*.json')) +
+                  glob.glob(os.path.join(snapdir, '*.json.gz')))
+
+
+def _load_snapshot(path):
+    if path.endswith('.gz'):
+        with gzip.open(path, 'rt', encoding='utf-8') as fh:
+            return json.load(fh)
+    with open(path, encoding='utf-8') as fh:
+        return json.load(fh)
+
+
+def _slug_from_name(path):
+    m = re.search(r'-ppc-website-masterplan-data-(.+)\.json(?:\.gz)?$', os.path.basename(path))
+    return m.group(1) if m else os.path.basename(path)
+
 
 def load_runs(snapdir):
-    files = sorted(glob.glob(os.path.join(snapdir, '*.json')))
+    files = _snapshot_files(snapdir)
     by_ts = {}
     for f in files:
         by_ts.setdefault(os.path.basename(f)[:19], []).append(f)
@@ -39,12 +66,16 @@ def load_runs(snapdir):
         raise SystemExit(f'need 2 full runs (>=20 estates), found: {sorted(len(v) for v in by_ts.values())}')
     ts = sorted(full)[-2:]
     out = []
+    quarantined = Counter()
     for t in ts:
         lots = {}
         for f in full[t]:
-            d = json.load(open(f))
-            slug = d.get('community', os.path.basename(f)[21:-5])
+            d = _load_snapshot(f)
+            slug = d.get('community') or _slug_from_name(f)
             cfg = d.get('lotConfig', d)
+            if slug in QUARANTINE:
+                quarantined[t] += len(cfg.get('all_lots_with_status', []))
+                continue
             for lot in cfg.get('all_lots_with_status', []):
                 lots[(slug, str(lot.get('lot_id')))] = {
                     'community': slug, 'lot_id': str(lot.get('lot_id')),
@@ -52,7 +83,7 @@ def load_runs(snapdir):
                     'stage': lot.get('stage_name', ''), 'status': str(lot.get('lot_status', '?')),
                     'published': lot.get('lot_post_status') == 'publish'}
         out.append((t, lots))
-    return out
+    return out, quarantined
 
 
 def polygon_placeholder():
@@ -61,10 +92,13 @@ def polygon_placeholder():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--input', required=True, help='dir of *-ppc-website-masterplan-data-*.json snapshots')
+    ap.add_argument('--input', required=True, help='dir of *-ppc-website-masterplan-data-*.json[.gz] snapshots')
     ap.add_argument('--out', default=os.path.join(HERE, 'reports'))
+    ap.add_argument('--charts', default=os.path.join(HERE, 'charts'),
+                    help='chart output dir (point elsewhere when testing)')
     args = ap.parse_args()
-    (t0, prev), (t1, cur) = load_runs(args.input)
+    runs, quarantined = load_runs(args.input)
+    (t0, prev), (t1, cur) = runs
     est_prev = {k[0] for k in prev}
     est_cur = {k[0] for k in cur}
     new_est = sorted(est_cur - est_prev)
@@ -96,7 +130,7 @@ def main():
     net = {e: v['sales'] - v['cancels'] for e, v in by_est.items()}
     date = t1[:10]
     repdir = os.path.join(args.out, date)
-    chdir = os.path.join(HERE, 'charts')
+    chdir = args.charts
     os.makedirs(repdir, exist_ok=True)
     os.makedirs(chdir, exist_ok=True)
 
@@ -165,6 +199,10 @@ def main():
         lines += ['', '## Estate changes',
                   f"New: {', '.join(new_est) if new_est else '—'}",
                   f"Gone: {', '.join(gone_est) if gone_est else '—'}"]
+    quar = [f'{t[:10]}: {n} lots' for t, n in sorted(quarantined.items()) if n]
+    if quar:
+        lines += ['', '_Quarantined (excluded from velocity — aggregate feed, see AGENTS.md): '
+                f'spring-mountain ({"; ".join(quar)})._']
     lines += ['', '_First-seen lots excluded from velocity. Method mirrors SGP persistent tracking._']
     open(os.path.join(repdir, 'WEEKLY.md'), 'w').write('\n'.join(lines) + '\n')
 

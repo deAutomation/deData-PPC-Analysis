@@ -1,2 +1,23 @@
 __pycache__/
 *.pyc
+.DS_Store
+
+# synced snapshots (scripts/sync.py output) — never commit
+_in/
+*-ppc-website-masterplan-data-*.json
+*-ppc-website-masterplan-data-*.json.gz
+*-ppc-website-masterplan-data-*.csv
+
+# _peet scratch: raw HTML, downloaded PDFs, full-resolution originals
+_peet/pages/
+_peet/fs/
+_peet/maps/
+_peet/pdf/
+_peet/_hires/
+_peet/samples/
+_peet/live/objects.csv
+_peet/delimiter.xml
+_peet/*.html
+_peet/svg_sheet.png
+_peet/check4.png
+_peet/contact_sheet.png
