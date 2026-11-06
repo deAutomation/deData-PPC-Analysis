@@ -32,36 +32,50 @@ No other hub code change is needed to *grant* the package: entitlements are
 keyed `{account_id}:{package_label}`, and `ppt` becomes a valid label the moment
 it is in the list. The catalogue card and login dropdown already use it.
 
-## 2. Firestore
+## 2. Firestore — **done**
 
-The ETL writes `PPC/masterplan-data/communities/{slug}`. First run:
+The ETL writes `PPC/masterplan-data/communities/{slug}` into
+`lic-data-452300` (the shared alt-data project — **not** `deautomation`, whose
+default database is Datastore mode and cannot hold this schema).
 
-```bash
-# after deploy, once
-gcloud run jobs execute ppc-etl-job --region=australia-southeast1 --wait
+Loaded 2026-11-06 from the two synced runs:
+
+```text
+PPC: 35 communities, status_counts for 2026-10-30 and 2026-11-06
+collections now: ADL  CWP  LIC  PPC  SGP  _users
 ```
 
-Verify one document exists and is small enough to read:
+To reload or extend, the job needs only env:
 
 ```bash
-gcloud firestore documents list --collection-ids=status_counts  # or the console
+GOOGLE_APPLICATION_CREDENTIALS=<key> \
+FIRESTORE_PROJECT=lic-data-452300 FIRESTORE_COLLECTION=PPC \
+python main.py --local-json ../deData-PPC-Analysis/_in --all-dates
 ```
 
-## 3. Schedule the two jobs
+## 3. Schedule — its own trigger, 2 h after the downloader
 
-The downloader must run before the ETL, weekly:
+PPC's downloader fires at **07:00 `Australia/Adelaide`** (observed in the bucket:
+`2026-10-30_07-00-19`, `2026-11-06_07-00-22`). The ETL gets its **own** scheduler
+entry, unique in the family, two hours later:
 
 ```bash
+# downloader (07:00 Wed)
 gcloud scheduler jobs create http ppc-masterplan-weekly \
-  --location=australia-southeast1 --schedule="0 21 * * 3" \
+  --location=australia-southeast1 --schedule="0 7 * * 3" --time-zone="Australia/Adelaide" \
   --uri="https://australia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/deautomation/jobs/ppc-masterplan-job:run" \
   --oauth-service-account-email=259851748981-compute@developer.gserviceaccount.com
 
+# ETL (09:00 Wed — 2 h buffer)
 gcloud scheduler jobs create http ppc-etl-weekly \
-  --location=australia-southeast1 --schedule="30 22 * * 3" \
+  --location=australia-southeast1 --schedule="0 9 * * 3" --time-zone="Australia/Adelaide" \
   --uri="https://australia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/deautomation/jobs/ppc-etl-job:run" \
   --oauth-service-account-email=259851748981-compute@developer.gserviceaccount.com
 ```
+
+Prerequisites still missing: Cloud Scheduler API is not enabled on
+`deautomation`, and `ppc-etl-job` is not deployed yet (CI builds it from the
+repo's `cloudbuild.yaml`).
 
 ## 4. Stripe product and payment link
 
@@ -77,26 +91,44 @@ One product, one price, one payment link — the link sells `ppt` only.
 > Until this exists, the listing must stay "by invitation". A price on the page
 > with no working link is a false listing.
 
-## 5. Product site
+## 5. Product site — next block of work
 
-Clone `data.deautomation.co-cwp` and change four things:
+Deferred by decision; this is the shape it should take. Clone
+`data.deautomation.co-cwp` (Flask + Firestore + family session) and change only
+what differs:
 
-| Change | Where |
-|---|---|
-| package label `cwp` → `ppt` | the entitlement call |
-| Firestore collection `CWP` → `PPC` | data layer |
-| read `status_counts/{date}` only | data layer — never raw runs |
-| branding / copy | templates and `dist/` |
+| Change | From (CWP) | To (PPT) |
+|---|---|---|
+| package label | `cwp` | `ppt` |
+| Firestore collection | `CWP` | `PPC` |
+| project | `lic-data-452300` | same |
+| reads | `status_counts/{date}` | same — never raw `runs/` |
+| service name | `cwp-data` | `ppt-data` |
+| host | `cwp.data.…` | `ppt.data.deautomation.co` |
+| branding / copy | CWP | Peet (ASX: PPC) |
 
-The session contract is already documented in the hub's `docs/HUB-INTEGRATION.md`:
-forward `da_session`, ask `/api/entitlements?package=ppt`, 403 on empty,
-redirect to `data.deautomation.co/login?return=…` on 401.
+Env it will need (mirroring the live CWP service):
+
+```text
+FIRESTORE_PROJECT = lic-data-452300
+FIRESTORE_COLLECTION = PPC
+PACKAGE_LABEL = ppt
+FLASK_SECRET_KEY = <secret: ppt-flask-secret>
+```
+
+Login is **not** built here — the site reads `da_session`, asks
+`https://data.deautomation.co/api/entitlements?package=ppt`, 403s on an empty
+list, and redirects to `data.deautomation.co/login?return=<host+path>` on 401.
+The dropdown on the hub stays the single sign-in surface, exactly as with CWP.
+
+Deployment: push to `main` → the repo's GitHub workflow builds `cloudbuild.yaml`
+→ Cloud Run service `ppt-data`. Never deploy by hand.
 
 ## 6. DNS
 
 ```bash
 gcloud run domain-mappings create \
-  --service=<ppt-site-service> \
+  --service=ppt-data \
   --domain=ppt.data.deautomation.co \
   --region=asia-southeast1
 ```

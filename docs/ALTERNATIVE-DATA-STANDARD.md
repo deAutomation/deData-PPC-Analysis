@@ -63,15 +63,30 @@ gs://masterplans/<label>/masterplans/json/{YYYY-MM-DD}_{HH-MM-SS}-<slug>-masterp
 
 ### 2.2 Firestore schema (layer 3 → 4)
 
-Identical for every company, so one front end reads all of them:
+**One project, one database, one collection per company.** Do not create a
+project per company — the hub, the product sites and every ETL share:
+
+| | |
+|---|---|
+| Project | `lic-data-452300` (inherited from the LIC portal; name is historical) |
+| Database | `(default)` — **Firestore Native**, `australia-southeast2` |
+| Collections | `ADL` · `CWP` · `LIC` · `PPC` · `SGP` · `_users` |
+
+`deautomation` (62119154094) hosts the *services*, not the data. Its default
+database is **Datastore mode** and cannot hold this schema — a `firestore.Client`
+against it fails with `The Cloud Firestore API is not available for Firestore in
+Datastore Mode`. Always set `FIRESTORE_PROJECT=lic-data-452300`.
+
+Identical paths for every company, so one front end reads all of them:
 
 ```text
-/{COMPANY}/masterplan-data/
-  communities/{slug}/
-    runs/{YYYY-MM-DD}/parts/{0000..}        # full unit list, that date
-    current/units/parts/{0000..}            # latest state
-    status_counts/{YYYY-MM-DD}              # the document the site reads
-  processed_blobs/{ts}:{slug}               # idempotency
+lic-data-452300/(default)
+  {COMPANY}/masterplan-data/
+    communities/{slug}/
+      runs/{YYYY-MM-DD}/parts/{0000..}        # full unit list, that date
+      current/units/parts/{0000..}            # latest state
+      status_counts/{YYYY-MM-DD}              # the document the site reads
+    processed_blobs/{ts}:{slug}               # idempotency
 ```
 
 `status_counts` is the public interface between ETL and site:
@@ -114,6 +129,41 @@ Cookie: da_session=...
 The product site never mints a session, never sets the cookie, never trusts the
 browser.
 
+### 2.5 Scheduling — one trigger per stage, one slot per company
+
+Every **ETL has its own Cloud Scheduler trigger**. Never chain the downloader and
+the ETL into a single job: a failure in one should not hide the other, and each
+needs its own timeout and retry policy.
+
+Rules:
+
+- **Own trigger per stage.** Downloader job and ETL job are separate Cloud Run
+  Jobs with separate Scheduler entries.
+- **Unique timing across the family.** Two companies' ETLs at the same minute
+  compete for Firestore writes and make logs hard to read. Stagger them.
+- **A buffer after that company's downloader** — default **2 hours**. The
+  downloader's runtime scales with estate count (Peet: ~35 pages, one GET each,
+  1s apart), and snapshots must all be present before the ETL starts.
+- **Weekly cadence** for every company unless the source changes faster.
+- **The schedule is infrastructure**, not repo configuration. Record it in the
+  project's `docs/PROVISIONING.md`; the repos only carry the code.
+
+Worked example (times in `Australia/Adelaide`):
+
+| Company | Downloader | ETL | Buffer |
+|---|---|---|---|
+| PPC (`ppt`) | 07:00 Wed (observed `07-00`) | 09:00 Wed | 2 h |
+| CWP (`cwp`) | its own slot | its own slot | ≥2 h |
+| SGP (`sgp`) | its own slot | its own slot | ≥2 h |
+
+```bash
+gcloud scheduler jobs create http ppc-etl-weekly \
+  --location=australia-southeast1 \
+  --schedule="0 9 * * 3" --time-zone="Australia/Adelaide" \
+  --uri="https://australia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/deautomation/jobs/ppc-etl-job:run" \
+  --oauth-service-account-email=<runtime-sa>
+```
+
 ## 3. Onboarding a new company
 
 1. **Register the label** — three letters, unique, permanent. Add it to
@@ -124,11 +174,11 @@ browser.
    `gs://masterplans/<label>/masterplans/{json,csv}/`, gzipped.
 3. **ETL** — new repo from `deData-PPC-ETL-Pipeline` (newest, smallest).
    Keep the schema and label vocabulary; change only the parser.
-4. **Firestore** — collection `{COMPANY}`, doc `masterplan-data`; the job's
-   service account needs `roles/datastore.user`.
-5. **Schedule** — downloader runs first; ETL after it, weekly, same region.
-   Schedules are infrastructure, not repo configuration — record them in
-   `docs/PROVISIONING.md` of the new project.
+4. **Firestore** — collection `{COMPANY}`, doc `masterplan-data`, in
+   `lic-data-452300`; the job's service account needs `roles/datastore.user`.
+5. **Schedule** — its **own** trigger, a unique slot in the family, ≥2 h after
+   that company's downloader (see §2.5). Record it in the project's
+   `PROVISIONING.md`.
 6. **Product site** — new repo from `data.deautomation.co-cwp`; reads
    Firestore, checks one entitlement, denies by default.
 7. **Stripe** — one product and one payment link per package; the link sells
