@@ -4,6 +4,20 @@ Weekly sales-velocity analysis on top of `deData-PPC-MasterplanDownloader`
 snapshots. **No ETL, no database, no website wiring** — snapshot diffs in,
 Markdown pack + charts out.
 
+This is the **research** repo for the Peet product. The production path is a
+separate chain, documented in
+[`docs/ALTERNATIVE-DATA-STANDARD.md`](docs/ALTERNATIVE-DATA-STANDARD.md):
+
+| Layer | Repository |
+|---|---|
+| Snapshotter | `deData-PPC-MasterplanDownloader` → `gs://masterplans/ppc/masterplans/json/` |
+| ETL → Firestore | `deData-PPC-ETL-Pipeline` → `PPC/masterplan-data/communities/{estate}` |
+| Product site | `ppt.data.deautomation.co` (planned — [`docs/PPT-GO-LIVE.md`](docs/PPT-GO-LIVE.md)) |
+| Identity, Stripe, entitlements | `data.deautomation.co` |
+
+Nothing in this repo feeds production. It exists to work out what the data
+means before the pipeline is trusted with it.
+
 ---
 
 ## Where things stand — 2026-11-06
